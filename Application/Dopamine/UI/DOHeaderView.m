@@ -71,7 +71,7 @@
 
             if ((NSInteger)idx == uptimeSubtitleIndex) {
                 self.uptimeLabel = label;
-                self.uptimeAttributes = formatedText.attributes;
+                self.uptimeAttributes = [formatedText attributesAtIndex:0 effectiveRange:NULL];
             }
         }];
 
