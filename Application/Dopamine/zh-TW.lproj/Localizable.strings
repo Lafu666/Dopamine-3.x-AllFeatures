@@ -155,3 +155,11 @@
 "Settings_Disable_Update" = "禁用更新檢測";
 "Error_Mount_Failed" = "掛載失敗，請確認越獄 basebin 已更新後重試。";
 "Error_Unmount_Failed" = "取消掛載失敗，已保留該條目以便重試。";
+
+// Theme names
+"Theme_Name_default" = "多巴胺";
+"Theme_Name_ellekit" = "ElleKit";
+"Theme_Name_blue" = "深藍天空";
+"Theme_Name_red" = "血紅天空";
+"Theme_Name_purple" = "沙漠黃昏";
+"Theme_Name_alona" = "阿羅娜";

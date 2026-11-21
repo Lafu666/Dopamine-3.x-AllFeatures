@@ -90,5 +90,27 @@
 		<key>titleShadow</key>
 		<false/>
 	</dict>
+	<dict>
+		<key>key</key>
+		<string>alona</string>
+		<key>icon</key>
+		<string>AppIcon_Alona</string>
+		<key>name</key>
+		<string>Alona</string>
+		<key>image</key>
+		<string>Background_Alona</string>
+		<key>imageLandscape</key>
+		<string>Background_Alona_Landscape</string>
+		<key>actionMenuColor</key>
+		<string>4F0D3F73</string>
+		<key>windowColor</key>
+		<string>60103052</string>
+		<key>blur</key>
+		<integer>28</integer>
+		<key>dimAlpha</key>
+		<real>0.28</real>
+		<key>titleShadow</key>
+		<true/>
+	</dict>
 </array>
 </plist>

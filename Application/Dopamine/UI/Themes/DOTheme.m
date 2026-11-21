@@ -10,6 +10,7 @@
 
 @interface DOTheme ()
 @property (nonatomic, retain) NSString *imageName;
+@property (nonatomic, retain) NSString *landscapeImageName;
 @end
 
 @implementation DOTheme
@@ -18,13 +19,21 @@
 {
     self = [super init];
     if (self) {
-        self.name = [dictionary objectForKey:@"name"];
-        self.icon = [dictionary objectForKey:@"icon"];
         self.key = [dictionary objectForKey:@"key"];
+
+        // Theme names are localized by key, falling back to the English name
+        // stored in Themes.plist when a translation is not available
+        NSString *defaultName = [dictionary objectForKey:@"name"];
+        NSString *localizationKey = [NSString stringWithFormat:@"Theme_Name_%@", self.key];
+        self.name = [[NSBundle mainBundle] localizedStringForKey:localizationKey value:defaultName table:nil];
+
+        self.icon = [dictionary objectForKey:@"icon"];
         self.imageName = [dictionary objectForKey:@"image"];
+        self.landscapeImageName = [dictionary objectForKey:@"imageLandscape"];
         self.windowColor = [self colorFromHexString:[dictionary objectForKey:@"windowColor"]];
         self.actionMenuColor = [self colorFromHexString:[dictionary objectForKey:@"actionMenuColor"]];
         self.blur = [[dictionary objectForKey:@"blur"] floatValue];
+        self.dimAlpha = [[dictionary objectForKey:@"dimAlpha"] floatValue];
         self.titleShadow = [[dictionary objectForKey:@"titleShadow"] boolValue];
     }
     return self;
@@ -45,6 +54,22 @@
     return _image;
 }
 
+- (UIImage *)landscapeImage
+{
+    if (_landscapeImage == nil && self.landscapeImageName)
+        _landscapeImage = [[UIImage imageNamed:self.landscapeImageName] imageWithBlur:self.blur];
+    return _landscapeImage;
+}
+
+- (UIImage *)imageForSize:(CGSize)size
+{
+    // Themes may ship a dedicated landscape artwork, otherwise use the
+    // portrait / universal one and let aspect fill crop it
+    if (size.width > size.height && self.landscapeImage)
+        return self.landscapeImage;
+    return self.image;
+}
+
 - (UIImage *)generateBootLogo
 {
     UIImage *backgroundImage = [self image];
@@ -52,7 +77,13 @@
 
     UIImage *overlayImage = [UIImage imageNamed:@"DopamineLogo"];
 
-    CGSize overlaySize = CGSizeMake(350, 350);
+    // Keep the logo inside the canvas, portrait artwork can be narrower than 350pt
+    CGFloat overlaySide = 350;
+    CGFloat maxSide = fmin(canvasSize.width, canvasSize.height) * 0.8;
+    if (overlaySide > maxSide)
+        overlaySide = maxSide;
+
+    CGSize overlaySize = CGSizeMake(overlaySide, overlaySide);
     CGPoint overlayOrigin = CGPointMake((canvasSize.width - overlaySize.width) / 2.0,
                                         (canvasSize.height - overlaySize.height) / 2.0);
 

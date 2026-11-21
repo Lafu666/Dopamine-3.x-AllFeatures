@@ -14,6 +14,8 @@
 @interface DONavigationController ()
 
 @property (nonatomic) UIImageView *backgroundImageView;
+@property (nonatomic) UIView *backgroundDimView;
+@property (nonatomic) CGSize lastBackgroundSize;
 @property (nonatomic) DOMainViewController *mainView;
 @property (nonatomic) DOModalBackAction *backAction;
 
@@ -41,20 +43,34 @@
     
     self.view.backgroundColor = [UIColor blackColor];
     self.backgroundImageView = [[UIImageView alloc] init];
-    self.backgroundImageView.image = [theme image];
+    self.backgroundImageView.image = [theme imageForSize:self.view.bounds.size];
     self.backgroundImageView.contentMode = UIViewContentModeScaleAspectFill;
     self.backgroundImageView.translatesAutoresizingMaskIntoConstraints = NO;
     self.backgroundImageView.userInteractionEnabled = NO;
-    self.backgroundImageView.layer.zPosition = -1;
+    self.backgroundImageView.layer.zPosition = -2;
 
     [self.view insertSubview:self.backgroundImageView atIndex:0];
-    
+
+    // Slightly dims bright wallpapers so that the white labels stay readable
+    self.backgroundDimView = [[UIView alloc] init];
+    self.backgroundDimView.backgroundColor = [UIColor blackColor];
+    self.backgroundDimView.alpha = theme.dimAlpha;
+    self.backgroundDimView.translatesAutoresizingMaskIntoConstraints = NO;
+    self.backgroundDimView.userInteractionEnabled = NO;
+    self.backgroundDimView.layer.zPosition = -1;
+
+    [self.view insertSubview:self.backgroundDimView atIndex:1];
+
     [NSLayoutConstraint activateConstraints:@[
         [self.backgroundImageView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
         [self.backgroundImageView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [self.backgroundImageView.topAnchor constraintEqualToAnchor:self.view.topAnchor constant:-100],
         [self.backgroundImageView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor constant:100],
-    ]];
+        [self.backgroundDimView.leadingAnchor constraintEqualToAnchor:self.view.leadingAnchor],
+        [self.backgroundDimView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
+        [self.backgroundDimView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
+        [self.backgroundDimView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
+    ]);
 
     self.backAction = [[DOModalBackAction alloc] initWithAction:^{
         [self popViewControllerAnimated:YES];
@@ -72,10 +88,24 @@
     ]];
 }
 
+- (void)viewDidLayoutSubviews
+{
+    [super viewDidLayoutSubviews];
+
+    // Swap between portrait and landscape artwork when the window size changes
+    CGSize size = self.view.bounds.size;
+    if (!CGSizeEqualToSize(size, self.lastBackgroundSize)) {
+        self.lastBackgroundSize = size;
+        self.backgroundImageView.image = [[[DOThemeManager sharedInstance] enabledTheme] imageForSize:size];
+    }
+}
+
 - (void)setBackgroundDimmed:(BOOL)dimmed
 {
+    CGFloat dimAlpha = [[DOThemeManager sharedInstance] enabledTheme].dimAlpha;
     [UIView animateWithDuration:0.3 animations:^{
         self.backgroundImageView.alpha = dimmed ? 0.4 : 1;
+        self.backgroundDimView.alpha = dimmed ? dimAlpha * 0.4 : dimAlpha;
     }];
     self.backgroundImageView.userInteractionEnabled = dimmed;
     self.backAction.hidden = !dimmed;

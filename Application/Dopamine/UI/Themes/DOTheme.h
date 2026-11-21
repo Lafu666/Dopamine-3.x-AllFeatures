@@ -18,10 +18,14 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, retain) UIColor *actionMenuColor;
 @property (nonatomic, retain) UIColor *windowColor;
 @property (nonatomic, retain) UIImage *image;
+@property (nonatomic, retain) UIImage *landscapeImage;
 @property (nonatomic, assign) float blur;
+@property (nonatomic, assign) float dimAlpha;
 @property (nonatomic, assign) BOOL titleShadow;
 
 - (id)initWithDictionary: (NSDictionary *)dictionary;
+
+- (UIImage *)imageForSize:(CGSize)size;
 
 - (UIImage *)generateBootLogo;
 

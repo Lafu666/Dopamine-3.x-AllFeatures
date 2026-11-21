@@ -155,3 +155,11 @@
 "Settings_Disable_Update" = "Disable Update Check";
 "Error_Mount_Failed" = "Failed to mount this path. Make sure the jailbreak basebin is up to date and try again.";
 "Error_Unmount_Failed" = "Failed to unmount this path. The entry was kept so you can try again.";
+
+// Theme names
+"Theme_Name_default" = "Dopamine";
+"Theme_Name_ellekit" = "ElleKit";
+"Theme_Name_blue" = "Deep Blue Sky";
+"Theme_Name_red" = "Blood Sky";
+"Theme_Name_purple" = "Desert Dusk";
+"Theme_Name_alona" = "Alona";
