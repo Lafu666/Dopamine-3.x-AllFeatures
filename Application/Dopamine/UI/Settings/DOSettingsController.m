@@ -364,11 +364,12 @@
                     [specifiers addObject:hideUnhideJailbreakSpecifier];
                 }
 
-                if (!envManager.isJailbroken && envManager.isInstalledThroughTrollStore) {
-                    // The "Remove Jailbreak" button cannot show when being jailbroken since pressing it would kinda be russian roulette
-                    // It might work, it might not and panic your device and leave it in a half uninstalled state
-                    // So this button is only for when you're not jailbroken and have Dopamine installed with TrollStore
-                    // The only supported uninstallation flow without TrollStore is to reboot and "rejailbreak" with "Remove Jailbreak" toggle enabled
+                // The "Remove Jailbreak" button is available when jailbroken as well, but pressing it while
+                // the jailbreak is active is risky: deleteBootstrap can panic the device or leave it in a
+                // half uninstalled state. The pressed handler therefore offers the safe "reboot first" flow
+                // (arm removeJailbreakEnabled, reboot, then let the next jailbreak attempt clean up) as the
+                // recommended option and keeps the immediate removal as an explicit second choice.
+                if (envManager.isJailbroken || envManager.isInstalledThroughTrollStore) {
                     PSSpecifier *removeJailbreakSpecifier = [PSSpecifier preferenceSpecifierNamed:@"" target:self set:defSetter get:defGetter detail:nil cell:PSStaticTextCell edit:nil];
                     [removeJailbreakSpecifier setProperty:@"Button_Remove_Jailbreak" forKey:@"title"];
                     [removeJailbreakSpecifier setProperty:[DOButtonCell class] forKey:@"cellClass"];
@@ -814,6 +815,34 @@
 
 - (void)removeJailbreakPressed
 {
+    DOEnvironmentManager *envManager = [DOEnvironmentManager sharedManager];
+
+    if (envManager.isJailbroken) {
+        // Pressing "Remove Jailbreak" while jailbroken is risky: the jailbreak is still active while the
+        // bootstrap is being deleted, which can panic the device or leave it half uninstalled.
+        // Recommended flow: arm removeJailbreakEnabled and reboot, the next jailbreak attempt will then
+        // run the regular, safe removal path (rebuild icon cache, delete bootstrap, do not jailbreak).
+        UIAlertController *alertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Alert_Remove_Jailbreak_Title") message:DOLocalizedString(@"Alert_Remove_Jailbreak_Jailbroken_Body") preferredStyle:UIAlertControllerStyleAlert];
+
+        UIAlertAction *rebootAndRemoveAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Reboot_And_Remove") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            [[DOPreferenceManager sharedManager] setPreferenceValue:@YES forKey:@"removeJailbreakEnabled"];
+            [[DOEnvironmentManager sharedManager] reboot];
+        }];
+
+        UIAlertAction *removeNowAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Remove_Now") style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+            [[DOEnvironmentManager sharedManager] deleteBootstrap];
+            [[DOEnvironmentManager sharedManager] reboot];
+        }];
+
+        UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Cancel") style:UIAlertActionStyleCancel handler:nil];
+
+        [alertController addAction:rebootAndRemoveAction];
+        [alertController addAction:removeNowAction];
+        [alertController addAction:cancelAction];
+        [self presentViewController:alertController animated:YES completion:nil];
+        return;
+    }
+
     UIAlertController *confirmationAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Alert_Remove_Jailbreak_Title") message:DOLocalizedString(@"Alert_Remove_Jailbreak_Pressed_Body") preferredStyle:UIAlertControllerStyleAlert];
     UIAlertAction *uninstallAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Continue") style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
         [[DOEnvironmentManager sharedManager] deleteBootstrap];

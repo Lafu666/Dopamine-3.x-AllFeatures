@@ -176,3 +176,8 @@
 "Unject_Count" = "%lu App(s) Selected";
 "Unject_Footer" = "Selected apps will not load any tweaks. Changes only apply to processes started afterwards; force-quit a running app first.";
 "Alert_Unject_Write_Failed" = "Failed to write the configuration. Make sure the jailbreak environment is available and try again.";
+
+// Remove jailbreak while jailbroken
+"Alert_Remove_Jailbreak_Jailbroken_Body" = "Removing the jailbreak deletes all jailbreak-related files. Apps, files and user data are kept. This action cannot be undone.\n\nReboot & Remove (recommended): the device reboots first. Open Dopamine afterwards and tap Jailbreak — the cleanup runs before the jailbreak is applied.\n\nRemove Now: deletes the jailbreak environment immediately and reboots. Tweaks that are still running may cause the device to panic.";
+"Button_Reboot_And_Remove" = "Reboot & Remove";
+"Button_Remove_Now" = "Remove Now";

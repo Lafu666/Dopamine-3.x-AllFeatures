@@ -171,3 +171,8 @@
 "Unject_Count" = "已选择 %lu 个应用";
 "Unject_Footer" = "被选中的应用不会加载任何插件。改动仅对之后启动的进程生效，已在运行的应用请先从后台关闭。";
 "Alert_Unject_Write_Failed" = "无法写入配置，请确认越狱环境正常后重试。";
+
+// Remove jailbreak while jailbroken
+"Alert_Remove_Jailbreak_Jailbroken_Body" = "移除越狱会删除所有与越狱相关的文件，普通应用、文件与用户数据会保留，操作不可撤销。\n\n「重启后移除」（推荐）：设备会先重启，之后打开 Dopamine 点击越狱，程序会在越狱前完成清理。\n\n「立即移除」：立即删除越狱环境并重启，仍在运行的插件可能导致设备异常。";
+"Button_Reboot_And_Remove" = "重启后移除";
+"Button_Remove_Now" = "立即移除";
