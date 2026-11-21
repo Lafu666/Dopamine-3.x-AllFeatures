@@ -22,12 +22,55 @@
 #define BASEBIN_LINK_BUNDLED_VERSION @"1.0.0"
 #define LAUNCHCTL_BUNDLED_VERSION @"1:1.2.0"
 
+// Bump this whenever the bundled package list or the installation logic below changes.
+// It is written into the jailbreak root after a successful run and is used to decide
+// whether the bundled packages still need to be processed.
+#define BUNDLED_TWEAKS_REVISION @"1"
+
 static NSDictionary *gBundledPackages = @{
     @"libkrw0-dopamine" : LIBKRW_DOPAMINE_BUNDLED_VERSION,
     @"libroot-dopamine" : LIBROOT_DOPAMINE_BUNDLED_VERSION,
     @"dopamine-basebin-link" : BASEBIN_LINK_BUNDLED_VERSION,
     @"launchctl" : LAUNCHCTL_BUNDLED_VERSION,
 };
+
+// Packages that are pre-installed on top of the bootstrap so that a fresh jailbreak
+// is immediately usable. The array is ordered: ElleKit is installed first because it
+// provides "mobilesubstrate", which the other packages depend on.
+static NSArray<NSDictionary *> *DOBundledTweakPackages(void)
+{
+    static NSArray<NSDictionary *> *packages;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        packages = @[
+            @{ @"identifier" : @"ellekit",
+               @"version" : @"1.2",
+               @"file" : @"ellekit.deb",
+               @"name" : @"ElleKit" },
+            @{ @"identifier" : @"preferenceloader",
+               @"version" : @"2.2.8",
+               @"file" : @"preferenceloader.deb",
+               @"name" : @"PreferenceLoader" },
+            @{ @"identifier" : @"com.opa334.altlist",
+               @"version" : @"1.0.11",
+               @"file" : @"altlist.deb",
+               @"name" : @"AltList" },
+            @{ @"identifier" : @"com.opa334.libsandy",
+               @"version" : @"1.1.6-4",
+               @"file" : @"libsandy.deb",
+               @"name" : @"libSandy" },
+            @{ @"identifier" : @"com.opa334.choicy",
+               @"version" : @"1.5.4-2",
+               @"file" : @"choicy.deb",
+               @"name" : @"Choicy" },
+            @{ @"identifier" : @"com.opa334.trollstorelite",
+               @"version" : @"2.1.1-2",
+               @"file" : @"trollstorelite.deb",
+               @"name" : @"TrollStore Lite" },
+        ];
+    });
+    return packages;
+}
 
 struct hfs_mount_args {
     char    *fspec;
@@ -481,29 +524,64 @@ NSString *const bootstrapErrorDomain = @"BootstrapErrorDomain";
     }
 }
 
+- (int)installPackage:(NSString *)packagePath forceDepends:(BOOL)forceDepends
+{
+    // --force-depends is only used as a fallback for packages whose only unmet dependency is
+    // the metadata-only "firmware" package that some bootstraps do not ship
+    if (forceDepends && getuid() == 0) {
+        return exec_cmd_trusted(JBROOT_PATH("/usr/bin/dpkg"), "-i", "--force-depends", packagePath.fileSystemRepresentation, NULL);
+    }
+    return [self installPackage:packagePath];
+}
+
 - (int)uninstallPackageWithIdentifier:(NSString *)identifier
 {
     return exec_cmd_trusted(JBROOT_PATH("/usr/bin/dpkg"), "-r", identifier.UTF8String, NULL);
 }
 
-- (NSString *)installedVersionForPackageWithIdentifier:(NSString *)identifier
+- (NSString *)dpkgStatusForPackageWithIdentifier:(NSString *)identifier
 {
     NSString *dpkgStatus = [NSString stringWithContentsOfFile:JBROOT_PATH(@"/var/lib/dpkg/status") encoding:NSUTF8StringEncoding error:nil];
+    if (!dpkgStatus) return nil;
+
     NSString *packageStartLine = [NSString stringWithFormat:@"Package: %@", identifier];
-    
-    NSArray *packageInfos = [dpkgStatus componentsSeparatedByString:@"\n\n"];
-    for (NSString *packageInfo in packageInfos) {
-        if ([packageInfo hasPrefix:packageStartLine]) {
-            __block NSString *version = nil;
-            [packageInfo enumerateLinesUsingBlock:^(NSString * _Nonnull line, BOOL * _Nonnull stop) {
-                if ([line hasPrefix:@"Version: "]) {
-                    version = [line substringFromIndex:9];
-                }
-            }];
-            return version;
+    for (NSString *packageInfo in [dpkgStatus componentsSeparatedByString:@"\n\n"]) {
+        // Compare the whole first line so that e.g. "ellekit" does not match "ellekit-dev"
+        NSString *firstLine = [packageInfo componentsSeparatedByString:@"\n"].firstObject;
+        if ([firstLine isEqualToString:packageStartLine]) {
+            return packageInfo;
         }
     }
     return nil;
+}
+
+- (NSString *)installedVersionForPackageWithIdentifier:(NSString *)identifier
+{
+    NSString *packageInfo = [self dpkgStatusForPackageWithIdentifier:identifier];
+    if (!packageInfo) return nil;
+
+    __block NSString *version = nil;
+    [packageInfo enumerateLinesUsingBlock:^(NSString * _Nonnull line, BOOL * _Nonnull stop) {
+        if ([line hasPrefix:@"Version: "]) {
+            version = [line substringFromIndex:9];
+        }
+    }];
+    return version;
+}
+
+- (BOOL)isPackageInstalled:(NSString *)identifier
+{
+    NSString *packageInfo = [self dpkgStatusForPackageWithIdentifier:identifier];
+    if (!packageInfo) return NO;
+
+    __block BOOL installed = NO;
+    [packageInfo enumerateLinesUsingBlock:^(NSString * _Nonnull line, BOOL * _Nonnull stop) {
+        if ([line hasPrefix:@"Status: "]) {
+            installed = [line hasSuffix:@" installed"];
+            *stop = YES;
+        }
+    }];
+    return installed;
 }
 
 - (NSError *)installPackageManagers
@@ -518,6 +596,81 @@ NSString *const bootstrapErrorDomain = @"BootstrapErrorDomain";
         }
     }
     return nil;
+}
+
+- (BOOL)shouldInstallBundledTweakPackage:(NSDictionary *)package
+{
+    NSString *identifier = package[@"identifier"];
+    if (![self isPackageInstalled:identifier]) return YES;
+
+    NSString *installedVersion = [self installedVersionForPackageWithIdentifier:identifier];
+    if (!installedVersion) return YES;
+
+    return [installedVersion numericalVersionRepresentation] < [package[@"version"] numericalVersionRepresentation];
+}
+
+- (void)installBundledTweaks
+{
+    NSString *markerPath = JBROOT_PATH(@"/.installed_bundled_tweaks");
+    NSString *installedRevision = [NSString stringWithContentsOfFile:markerPath encoding:NSUTF8StringEncoding error:nil];
+    if ([[installedRevision stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]] isEqualToString:BUNDLED_TWEAKS_REVISION]) {
+        return;
+    }
+
+    // Only touch packages that are missing or older than the bundled version,
+    // never downgrade or reinstall something the user already has
+    BOOL allSucceeded = YES;
+    NSMutableArray<NSDictionary *> *packagesToInstall = [NSMutableArray new];
+    for (NSDictionary *package in DOBundledTweakPackages()) {
+        if (![self shouldInstallBundledTweakPackage:package]) continue;
+
+        NSString *path = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:package[@"file"]];
+        if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+            NSLog(@"[BundledTweaks] Missing bundled package %@", package[@"file"]);
+            [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"Missing Bundled Package %@", package[@"file"]] debug:NO];
+            allSucceeded = NO;
+            continue;
+        }
+        [packagesToInstall addObject:package];
+    }
+
+    if (packagesToInstall.count > 0) {
+        [[DOUIManager sharedInstance] sendLog:@"Installing Bundled Tweaks" debug:NO];
+
+        NSUInteger index = 0;
+        for (NSDictionary *package in packagesToInstall) {
+            index++;
+
+            NSString *name = package[@"name"];
+            NSString *path = [[NSBundle mainBundle].bundlePath stringByAppendingPathComponent:package[@"file"]];
+            [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"Installing %@ (%lu/%lu)", name, (unsigned long)index, (unsigned long)packagesToInstall.count] debug:NO];
+
+            int r = [self installPackage:path];
+            if (r != 0 && ![package[@"identifier"] isEqualToString:@"ellekit"]) {
+                NSLog(@"[BundledTweaks] Installing %@ failed with error %d, retrying with --force-depends", name, r);
+                r = [self installPackage:path forceDepends:YES];
+            }
+
+            if (r != 0) {
+                NSLog(@"[BundledTweaks] Failed to install %@: %d", name, r);
+                [[DOUIManager sharedInstance] sendLog:[NSString stringWithFormat:@"Failed to install %@", name] debug:NO];
+                allSucceeded = NO;
+
+                // Every remaining package depends on ElleKit providing mobilesubstrate,
+                // so there is no point in continuing if it could not be installed
+                if ([package[@"identifier"] isEqualToString:@"ellekit"]) {
+                    [[DOUIManager sharedInstance] sendLog:@"Skipping Remaining Bundled Tweaks" debug:NO];
+                    break;
+                }
+            }
+        }
+    }
+
+    // Only mark this revision as done once every package was installed successfully,
+    // otherwise the failed ones are retried on the next jailbreak
+    if (allSucceeded) {
+        [BUNDLED_TWEAKS_REVISION writeToFile:markerPath atomically:NO encoding:NSUTF8StringEncoding error:nil];
+    }
 }
 
 - (BOOL)shouldInstallPackage:(NSString *)identifier
@@ -595,6 +748,8 @@ NSString *const bootstrapErrorDomain = @"BootstrapErrorDomain";
             if (r != 0) return [NSError errorWithDomain:bootstrapErrorDomain code:BootstrapErrorCodeFailedFinalising userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Failed to install basebin link: %d\n", r]}];
         }
     }
+
+    [self installBundledTweaks];
 
     return nil;
 }
