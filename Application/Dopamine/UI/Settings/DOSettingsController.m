@@ -20,6 +20,8 @@
 #import "DOSceneDelegate.h"
 #import "DOPSJetsamListItemsController.h"
 #import "DOButtonCell.h"
+#import "DOUnjectManager.h"
+#import "DOUnjectController.h"
 #import <sys/mount.h>
 #import <stdlib.h>
 
@@ -280,6 +282,26 @@
                 [specifiers addObject:removeJailbreakSwitchSpecifier];
             }
 
+            if (envManager.isJailbroken) {
+                PSSpecifier *unjectGroupSpecifier = [PSSpecifier emptyGroupSpecifier];
+                unjectGroupSpecifier.name = DOLocalizedString(@"Section_Unject");
+                NSString *unjectFooter = [NSString stringWithFormat:DOLocalizedString(@"Hint_Unject"), (unsigned long)[[DOUnjectManager sharedManager] blacklistedCount]];
+                [unjectGroupSpecifier setProperty:unjectFooter forKey:@"footerText"];
+                [specifiers addObject:unjectGroupSpecifier];
+
+                PSSpecifier *unjectEnabledSpecifier = [PSSpecifier preferenceSpecifierNamed:DOLocalizedString(@"Settings_Unject_Enabled") target:self set:@selector(setUnjectEnabled:specifier:) get:@selector(readUnjectEnabled:) detail:nil cell:PSSwitchCell edit:nil];
+                [unjectEnabledSpecifier setProperty:@YES forKey:@"enabled"];
+                [specifiers addObject:unjectEnabledSpecifier];
+
+                PSSpecifier *unjectManageSpecifier = [PSSpecifier preferenceSpecifierNamed:@"" target:self set:defSetter get:defGetter detail:nil cell:PSStaticTextCell edit:nil];
+                [unjectManageSpecifier setProperty:@"Button_Unject_Manage" forKey:@"title"];
+                [unjectManageSpecifier setProperty:[DOButtonCell class] forKey:@"cellClass"];
+                [unjectManageSpecifier setProperty:buttonHeight forKey:@"height"];
+                [unjectManageSpecifier setProperty:@"hand.raised.slash" forKey:@"image"];
+                [unjectManageSpecifier setProperty:@"unjectManagePressed" forKey:@"action"];
+                [specifiers addObject:unjectManageSpecifier];
+            }
+
             if (envManager.isBootstrapped) {
                 PSSpecifier *actionsGroupSpecifier = [PSSpecifier emptyGroupSpecifier];
                 actionsGroupSpecifier.name = DOLocalizedString(@"Section_Actions");
@@ -521,6 +543,43 @@
         [userspaceRebootAlertController addAction:rebootLaterAction];
         [self presentViewController:userspaceRebootAlertController animated:YES completion:nil];
     }
+}
+
+- (id)readUnjectEnabled:(PSSpecifier *)specifier
+{
+    if ([DOEnvironmentManager sharedManager].isJailbroken) {
+        return @([[DOUnjectManager sharedManager] enabled]);
+    }
+    return @NO;
+}
+
+- (void)setUnjectEnabled:(id)value specifier:(PSSpecifier *)specifier
+{
+    [[DOUnjectManager sharedManager] setEnabled:((NSNumber *)value).boolValue];
+    [self reloadSpecifiers];
+}
+
+- (void)unjectManagePressed:(PSSpecifier *)specifier
+{
+    DOUnjectController *controller = [[DOUnjectController alloc] init];
+    __weak typeof(self) weakSelf = self;
+    controller.onChange = ^{
+        [weakSelf reloadSpecifiers];
+    };
+
+    UINavigationController *navigationController = [[UINavigationController alloc] initWithRootViewController:controller];
+    navigationController.modalPresentationStyle = UIModalPresentationPageSheet;
+    navigationController.overrideUserInterfaceStyle = UIUserInterfaceStyleDark;
+    navigationController.navigationBar.tintColor = [UIColor colorWithRed:71.0/255.0 green:169.0/255.0 blue:135.0/255.0 alpha:1.0];
+
+    UINavigationBarAppearance *appearance = [[UINavigationBarAppearance alloc] init];
+    [appearance configureWithOpaqueBackground];
+    appearance.backgroundColor = [UIColor colorWithWhite:0.07 alpha:1.0];
+    appearance.titleTextAttributes = @{ NSForegroundColorAttributeName : [UIColor whiteColor] };
+    navigationController.navigationBar.standardAppearance = appearance;
+    navigationController.navigationBar.scrollEdgeAppearance = appearance;
+
+    [self presentViewController:navigationController animated:YES completion:nil];
 }
 
 - (id)readAppJITEnabled:(PSSpecifier *)specifier

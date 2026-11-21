@@ -160,3 +160,14 @@
 "Theme_Name_alona" = "阿罗娜";
 "Theme_Name_ayase" = "小寺亚世美";
 "Theme_Name_amagi" = "甘城猫猫";
+
+// Unject
+"Section_Unject" = "Unject 选择性注入";
+"Settings_Unject_Enabled" = "启用黑名单";
+"Button_Unject_Manage" = "管理不注入的应用";
+"Hint_Unject" = "名单内的应用启动时不会加载任何插件，当前已选择 %lu 个。修改后需先从后台关闭该应用，再重新打开才会生效。";
+"Unject_Title" = "Unject";
+"Unject_Search" = "搜索应用";
+"Unject_Count" = "已选择 %lu 个应用";
+"Unject_Footer" = "被选中的应用不会加载任何插件。改动仅对之后启动的进程生效，已在运行的应用请先从后台关闭。";
+"Alert_Unject_Write_Failed" = "无法写入配置，请确认越狱环境正常后重试。";

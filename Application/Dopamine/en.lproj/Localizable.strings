@@ -165,3 +165,14 @@
 "Theme_Name_alona" = "Alona";
 "Theme_Name_ayase" = "Kodera Ayase";
 "Theme_Name_amagi" = "Amagi Nyan";
+
+// Unject
+"Section_Unject" = "Unject";
+"Settings_Unject_Enabled" = "Selective Injection Blacklist";
+"Button_Unject_Manage" = "Manage Apps";
+"Hint_Unject" = "Apps in this list launch without any tweaks injected. %lu app(s) selected. Force-quit an app before reopening it so the change takes effect.";
+"Unject_Title" = "Unject";
+"Unject_Search" = "Search Apps";
+"Unject_Count" = "%lu App(s) Selected";
+"Unject_Footer" = "Selected apps will not load any tweaks. Changes only apply to processes started afterwards; force-quit a running app first.";
+"Alert_Unject_Write_Failed" = "Failed to write the configuration. Make sure the jailbreak environment is available and try again.";

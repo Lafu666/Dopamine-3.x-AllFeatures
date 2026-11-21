@@ -7,6 +7,8 @@
 #include <sandbox.h>
 #include <paths.h>
 #include <sys/stat.h>
+#include <stdlib.h>
+#include <string.h>
 #include <dlfcn.h>
 #include "envbuf.h"
 #include "private.h"
@@ -118,6 +120,125 @@ xpc_object_t jbuserconfig_get_value(const char *key)
 	return NULL;
 }
 
+// Unject: user configured selective injection blacklist
+// Config: <jbroot>/basebin/unject.plist
+//   { Enabled: <bool>, Executables: [<string>, ...] }
+// The legacy /var/mobile/zp.unject.plist (dictionary of executable name -> bool) is honored as well.
+#define UNJECT_CONFIG_PATH JBROOT_PATH("/basebin/unject.plist")
+#define UNJECT_LEGACY_CONFIG_PATH "/var/mobile/zp.unject.plist"
+
+static bool gUnjectEnabled = false;
+static char **gUnjectExecutables = NULL;
+static size_t gUnjectExecutableCount = 0;
+static bool gUnjectConfigLoaded = false;
+static struct timespec gUnjectConfigTimestamp = { .tv_sec = 0, .tv_nsec = 0 };
+
+static void unject_clear_executables(void)
+{
+	if (gUnjectExecutables) {
+		for (size_t i = 0; i < gUnjectExecutableCount; i++) {
+			free(gUnjectExecutables[i]);
+		}
+		free(gUnjectExecutables);
+		gUnjectExecutables = NULL;
+	}
+	gUnjectExecutableCount = 0;
+}
+
+static void unject_add_executable(const char *executable)
+{
+	if (!executable || !executable[0]) return;
+	for (size_t i = 0; i < gUnjectExecutableCount; i++) {
+		if (!strcmp(gUnjectExecutables[i], executable)) return;
+	}
+
+	char **list = realloc(gUnjectExecutables, (gUnjectExecutableCount + 1) * sizeof(char *));
+	if (!list) return;
+	gUnjectExecutables = list;
+
+	char *copy = strdup(executable);
+	if (!copy) return;
+	gUnjectExecutables[gUnjectExecutableCount] = copy;
+	gUnjectExecutableCount++;
+}
+
+static void unject_load_config(void)
+{
+	struct stat st;
+	bool exists = (stat(UNJECT_CONFIG_PATH, &st) == 0);
+
+	if (gUnjectConfigLoaded) {
+		if (!exists && gUnjectConfigTimestamp.tv_sec == 0 && gUnjectConfigTimestamp.tv_nsec == 0) return;
+		if (exists && timespec_compare(&st.st_mtimespec, &gUnjectConfigTimestamp) == 0) return;
+	}
+
+	gUnjectConfigLoaded = true;
+	gUnjectEnabled = false;
+	unject_clear_executables();
+
+	if (!exists) {
+		gUnjectConfigTimestamp.tv_sec = 0;
+		gUnjectConfigTimestamp.tv_nsec = 0;
+		return;
+	}
+
+	gUnjectConfigTimestamp = st.st_mtimespec;
+
+	xpc_object_t config = xpc_object_from_plist(UNJECT_CONFIG_PATH);
+	if (!config) return;
+
+	if (xpc_get_type(config) == XPC_TYPE_DICTIONARY) {
+		gUnjectEnabled = xpc_dictionary_get_bool(config, "Enabled");
+
+		xpc_object_t executables = xpc_dictionary_get_value(config, "Executables");
+		if (executables && xpc_get_type(executables) == XPC_TYPE_ARRAY) {
+			size_t count = xpc_array_get_count(executables);
+			for (size_t i = 0; i < count; i++) {
+				unject_add_executable(xpc_array_get_string(executables, i));
+			}
+		}
+	}
+
+	xpc_release(config);
+}
+
+static bool unject_path_is_blacklisted(const char *path)
+{
+	if (!path || !path[0]) return false;
+
+	// Never touch the jailbreak's own binaries
+	if (strstr(path, "/var/jb")) return false;
+
+	// Only consider executables that live inside an app bundle
+	// This covers App Store apps as well as app extensions (Foo.app/PlugIns/Bar.appex/Bar)
+	if (!strstr(path, ".app/")) return false;
+
+	const char *executable = strrchr(path, '/');
+	executable = executable ? executable + 1 : path;
+
+	unject_load_config();
+	if (gUnjectEnabled) {
+		for (size_t i = 0; i < gUnjectExecutableCount; i++) {
+			if (!strcmp(gUnjectExecutables[i], executable)) return true;
+		}
+	}
+
+	// Legacy configuration used by zp's unject method, dictionary of executable name -> bool
+	if (access(UNJECT_LEGACY_CONFIG_PATH, F_OK) == 0) {
+		xpc_object_t legacy = xpc_object_from_plist(UNJECT_LEGACY_CONFIG_PATH);
+		if (legacy) {
+			bool blacklisted = false;
+			if (xpc_get_type(legacy) == XPC_TYPE_DICTIONARY) {
+				blacklisted = xpc_dictionary_get_bool(legacy, executable);
+			}
+			xpc_release(legacy);
+			if (blacklisted) return true;
+		}
+	}
+
+	return false;
+}
+
 static kSpawnConfig spawn_config_for_executable(const char* path, char *const argv[restrict])
 {
 	// Blacklist to ensure general system stability
@@ -141,6 +262,9 @@ static kSpawnConfig spawn_config_for_executable(const char* path, char *const ar
 			if (!strcmp(xpc_array_get_string(userBlacklist, i), path)) return kSpawnConfigTrust;
 		}
 	}
+
+	// Unject: user selected apps that should be launched without any tweaks injected
+	if (unject_path_is_blacklisted(path)) return kSpawnConfigTrust;
 
 	return (kSpawnConfigInject | kSpawnConfigTrust);
 }
