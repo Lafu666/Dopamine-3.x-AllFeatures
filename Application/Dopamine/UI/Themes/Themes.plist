@@ -132,5 +132,25 @@
 		<key>titleShadow</key>
 		<true/>
 	</dict>
+	<dict>
+		<key>key</key>
+		<string>amagi</string>
+		<key>icon</key>
+		<string>AppIcon_Amagi</string>
+		<key>name</key>
+		<string>Amagi Nyan</string>
+		<key>image</key>
+		<string>Background_Amagi</string>
+		<key>actionMenuColor</key>
+		<string>5F1A2028</string>
+		<key>windowColor</key>
+		<string>6010141C</string>
+		<key>blur</key>
+		<integer>20</integer>
+		<key>dimAlpha</key>
+		<real>0.22</real>
+		<key>titleShadow</key>
+		<true/>
+	</dict>
 </array>
 </plist>
