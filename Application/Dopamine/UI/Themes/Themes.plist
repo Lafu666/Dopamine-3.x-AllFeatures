@@ -112,5 +112,25 @@
 		<key>titleShadow</key>
 		<true/>
 	</dict>
+	<dict>
+		<key>key</key>
+		<string>ayase</string>
+		<key>icon</key>
+		<string>AppIcon_Ayase</string>
+		<key>name</key>
+		<string>Kodera Ayase</string>
+		<key>image</key>
+		<string>Background_Ayase</string>
+		<key>actionMenuColor</key>
+		<string>5F0A1626</string>
+		<key>windowColor</key>
+		<string>6008101C</string>
+		<key>blur</key>
+		<integer>16</integer>
+		<key>dimAlpha</key>
+		<real>0.10</real>
+		<key>titleShadow</key>
+		<true/>
+	</dict>
 </array>
 </plist>
