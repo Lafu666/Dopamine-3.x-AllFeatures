@@ -20,6 +20,8 @@
 #import "DOSceneDelegate.h"
 #import "DOPSJetsamListItemsController.h"
 #import "DOButtonCell.h"
+#import <sys/mount.h>
+#import <stdlib.h>
 
 @interface DOSettingsController ()
 
@@ -255,7 +257,13 @@
             [appJitSpecifier setProperty:@"appJITEnabled" forKey:@"key"];
             [appJitSpecifier setProperty:@YES forKey:@"default"];
             [specifiers addObject:appJitSpecifier];
-            
+
+            PSSpecifier *disableUpdateSpecifier = [PSSpecifier preferenceSpecifierNamed:DOLocalizedString(@"Settings_Disable_Update") target:self set:defSetter get:defGetter detail:nil cell:PSSwitchCell edit:nil];
+            [disableUpdateSpecifier setProperty:@YES forKey:@"enabled"];
+            [disableUpdateSpecifier setProperty:@"disableUpdateEnabled" forKey:@"key"];
+            [disableUpdateSpecifier setProperty:@NO forKey:@"default"];
+            [specifiers addObject:disableUpdateSpecifier];
+
             PSSpecifier *jetsamSpecifier = [PSSpecifier preferenceSpecifierNamed:DOLocalizedString(@"Settings_Jetsam_Multiplier") target:self set:@selector(setJetsamMultiplier:specifier:) get:@selector(readJetsamMultiplier:) detail:nil cell:PSLinkListCell edit:nil];
             [jetsamSpecifier setProperty:@YES forKey:@"enabled"];
             [jetsamSpecifier setProperty:@"jetsamMultiplier" forKey:@"key"];
@@ -304,6 +312,14 @@
                         [reinstallPackageManagersSpecifier setProperty:@"shippingbox" forKey:@"image"];
                     [reinstallPackageManagersSpecifier setProperty:@"reinstallPackageManagersPressed" forKey:@"action"];
                     [specifiers addObject:reinstallPackageManagersSpecifier];
+
+                    PSSpecifier *rebootSpecifier = [PSSpecifier preferenceSpecifierNamed:@"" target:self set:defSetter get:defGetter detail:nil cell:PSStaticTextCell edit:nil];
+                    [rebootSpecifier setProperty:@"Button_Reboot" forKey:@"title"];
+                    [rebootSpecifier setProperty:[DOButtonCell class] forKey:@"cellClass"];
+                    [rebootSpecifier setProperty:buttonHeight forKey:@"height"];
+                    [rebootSpecifier setProperty:@"power" forKey:@"image"];
+                    [rebootSpecifier setProperty:@"rebootPressed" forKey:@"action"];
+                    [specifiers addObject:rebootSpecifier];
                 }
 
                 BOOL hideJailbreakButtonShown = (envManager.isJailbroken || (envManager.isInstalledThroughTrollStore && !envManager.isJailbreakHidden));
@@ -345,7 +361,30 @@
                 }
             }
         }
-        
+
+        if (envManager.isJailbroken) {
+            PSSpecifier *mountGroupSpecifier = [PSSpecifier emptyGroupSpecifier];
+            mountGroupSpecifier.name = DOLocalizedString(@"Section_Mount");
+            [mountGroupSpecifier setProperty:DOLocalizedString(@"Hint_Mount") forKey:@"footerText"];
+            [specifiers addObject:mountGroupSpecifier];
+
+            PSSpecifier *mountSpecifier = [PSSpecifier preferenceSpecifierNamed:@"" target:self set:defSetter get:defGetter detail:nil cell:PSStaticTextCell edit:nil];
+            [mountSpecifier setProperty:@"Button_Mount_Add" forKey:@"title"];
+            [mountSpecifier setProperty:[DOButtonCell class] forKey:@"cellClass"];
+            [mountSpecifier setProperty:buttonHeight forKey:@"height"];
+            [mountSpecifier setProperty:@"folder.badge.plus" forKey:@"image"];
+            [mountSpecifier setProperty:@"mountPressed" forKey:@"action"];
+            [specifiers addObject:mountSpecifier];
+
+            PSSpecifier *unmountSpecifier = [PSSpecifier preferenceSpecifierNamed:@"" target:self set:defSetter get:defGetter detail:nil cell:PSStaticTextCell edit:nil];
+            [unmountSpecifier setProperty:@"Button_Mount_Manage" forKey:@"title"];
+            [unmountSpecifier setProperty:[DOButtonCell class] forKey:@"cellClass"];
+            [unmountSpecifier setProperty:buttonHeight forKey:@"height"];
+            [unmountSpecifier setProperty:@"folder" forKey:@"image"];
+            [unmountSpecifier setProperty:@"unmountPressed" forKey:@"action"];
+            [specifiers addObject:unmountSpecifier];
+        }
+
         PSSpecifier *themingGroupSpecifier = [PSSpecifier emptyGroupSpecifier];
         themingGroupSpecifier.name = DOLocalizedString(@"Section_Customization");
         [specifiers addObject:themingGroupSpecifier];
@@ -733,6 +772,227 @@
     }];
     UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Cancel") style:UIAlertActionStyleDefault handler:nil];
     [confirmationAlertController addAction:uninstallAction];
+    [confirmationAlertController addAction:cancelAction];
+    [self presentViewController:confirmationAlertController animated:YES completion:nil];
+}
+
+#pragma mark - Mount Mapping
+
+- (NSString *)normalizedMountPath:(NSString *)path
+{
+    if (path.length == 0) return nil;
+
+    NSString *trimmedPath = [path stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if (trimmedPath.length == 0) return nil;
+    if (![trimmedPath hasPrefix:@"/"]) {
+        trimmedPath = [@"/" stringByAppendingString:trimmedPath];
+    }
+    return [trimmedPath stringByStandardizingPath];
+}
+
+- (BOOL)isValidMountPath:(NSString *)path
+{
+    if (path.length <= 1 || ![path hasPrefix:@"/"]) return NO;
+
+    // Never map the jailbreak root or something inside of it
+    if ([path isEqualToString:@"/var/jb"] || [path hasPrefix:@"/var/jb/"] || [path hasPrefix:@"/private/var/jb"]) return NO;
+
+    // Refuse to map huge system roots, copying them would fill up the disk
+    NSSet *forbiddenPaths = [NSSet setWithArray:@[
+        @"/var", @"/private/var", @"/var/mobile", @"/private/var/mobile",
+        @"/System", @"/usr", @"/bin", @"/sbin", @"/Library", @"/Applications",
+        @"/private/preboot",
+    ]];
+    return ![forbiddenPaths containsObject:path];
+}
+
+- (BOOL)isMountPathActive:(NSString *)path
+{
+    struct statfs fsb;
+    const char *pathC = path.fileSystemRepresentation;
+    if (statfs(pathC, &fsb) != 0) return NO;
+    if (strcmp(fsb.f_mntonname, pathC) == 0) return YES;
+
+    // /var is a symlink to /private/var, the kernel may report the resolved path
+    char resolvedPath[PATH_MAX];
+    return realpath(pathC, resolvedPath) && strcmp(fsb.f_mntonname, resolvedPath) == 0;
+}
+
+- (void)presentMountErrorWithBody:(NSString *)body
+{
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIAlertController *errorAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Log_Error") message:body preferredStyle:UIAlertControllerStyleAlert];
+        [errorAlertController addAction:[UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Mount") style:UIAlertActionStyleDefault handler:nil]];
+        [self presentViewController:errorAlertController animated:YES completion:nil];
+    });
+}
+
+- (void)configurePopoverForAlertController:(UIAlertController *)alertController
+{
+    if (alertController.popoverPresentationController) {
+        alertController.popoverPresentationController.sourceView = self.view;
+        alertController.popoverPresentationController.sourceRect = CGRectMake(CGRectGetMidX(self.view.bounds), CGRectGetMidY(self.view.bounds), 1, 1);
+        alertController.popoverPresentationController.permittedArrowDirections = 0;
+    }
+}
+
+- (void)mountPressed
+{
+    UIAlertController *inputAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Input_Mount_Add_Title") message:DOLocalizedString(@"Input_Mount_Title") preferredStyle:UIAlertControllerStyleAlert];
+    [inputAlertController addTextFieldWithConfigurationHandler:^(UITextField * _Nonnull textField) {
+        textField.placeholder = DOLocalizedString(@"Input_Mount_Placeholder");
+        textField.autocorrectionType = UITextAutocorrectionTypeNo;
+        textField.autocapitalizationType = UITextAutocapitalizationTypeNone;
+        textField.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+
+    __weak UIAlertController *weakInputAlertController = inputAlertController;
+    UIAlertAction *mountAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Mount") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        UIAlertController *alertController = weakInputAlertController;
+        NSString *inputPath = alertController.textFields.firstObject.text;
+        if (inputPath.length == 0) return;
+
+        NSString *mountPath = [self normalizedMountPath:inputPath];
+        if (!mountPath) return;
+
+        BOOL isDirectory = NO;
+        BOOL isExist = [[NSFileManager defaultManager] fileExistsAtPath:mountPath isDirectory:&isDirectory];
+        if (!isExist || !isDirectory) {
+            [self presentMountErrorWithBody:DOLocalizedString(@"Error_Mount_Body")];
+            return;
+        }
+        if (![self isValidMountPath:mountPath]) {
+            [self presentMountErrorWithBody:DOLocalizedString(@"Error_Mount_Invalid_Path")];
+            return;
+        }
+
+        NSString *plistFilePath = JBROOT_PATH(@"/mnt/newFakePath.plist");
+        NSMutableDictionary *plistDictionary = [NSMutableDictionary dictionaryWithContentsOfFile:plistFilePath];
+        if (!plistDictionary) {
+            plistDictionary = [NSMutableDictionary dictionary];
+        }
+        id storedPaths = plistDictionary[@"path"];
+        NSMutableArray *pathArray = [storedPaths isKindOfClass:[NSArray class]] ? [storedPaths mutableCopy] : [NSMutableArray array];
+        if (![pathArray containsObject:mountPath]) {
+            [pathArray addObject:mountPath];
+            plistDictionary[@"path"] = pathArray;
+            [[DOEnvironmentManager sharedManager] mountDictionary:[plistDictionary copy] writeToFile:plistFilePath];
+        }
+
+        int mountStatus = [[DOEnvironmentManager sharedManager] fakeMount:mountPath unmount:NO shouldDeleteMntFiles:NO];
+
+        if (mountStatus != 0 || ![self isMountPathActive:mountPath]) {
+            [self presentMountErrorWithBody:DOLocalizedString(@"Error_Mount_Failed")];
+        }
+    }];
+
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Cancel") style:UIAlertActionStyleCancel handler:nil];
+
+    [inputAlertController addAction:mountAction];
+    [inputAlertController addAction:cancelAction];
+
+    [self presentViewController:inputAlertController animated:YES completion:nil];
+}
+
+- (void)unmountPressed
+{
+    NSString *plistPath = JBROOT_PATH(@"/mnt/newFakePath.plist");
+    NSMutableDictionary *plist = [NSMutableDictionary dictionaryWithContentsOfFile:plistPath];
+    id storedPaths = plist[@"path"];
+    NSMutableArray *paths = [storedPaths isKindOfClass:[NSArray class]] ? [storedPaths mutableCopy] : nil;
+    if (paths.count == 0) {
+        [self presentMountErrorWithBody:DOLocalizedString(@"No_Mount_Paths")];
+        return;
+    }
+
+    UIAlertController *listAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Select_Mount_Title") message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    [self configurePopoverForAlertController:listAlertController];
+
+    __weak typeof(self) weakSelf = self;
+    for (NSString *path in paths) {
+        UIAlertAction *pathAction = [UIAlertAction actionWithTitle:path style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                [weakSelf showMountActionsForPath:path];
+            });
+        }];
+        [listAlertController addAction:pathAction];
+    }
+
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Cancel") style:UIAlertActionStyleCancel handler:nil];
+    [listAlertController addAction:cancelAction];
+
+    [self presentViewController:listAlertController animated:YES completion:nil];
+}
+
+- (void)showMountActionsForPath:(NSString *)path
+{
+    UIAlertController *actionAlertController = [UIAlertController alertControllerWithTitle:path message:nil preferredStyle:UIAlertControllerStyleActionSheet];
+    [self configurePopoverForAlertController:actionAlertController];
+
+    __weak typeof(self) weakSelf = self;
+    UIAlertAction *unmountAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Delete") style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+        [weakSelf removeMountPath:path unmount:YES];
+    }];
+
+    UIAlertAction *viewAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_View") style:UIAlertActionStyleDefault handler:^(UIAlertAction * _Nonnull action) {
+        NSString *targetMountPath = [JBROOT_PATH(@"/mnt") stringByAppendingString:path];
+        NSURL *filzaURL = [NSURL URLWithString:[@"filza://view" stringByAppendingString:targetMountPath]];
+        NSURL *fffffURL = [NSURL URLWithString:[@"fffff://view" stringByAppendingString:targetMountPath]];
+        if ([[UIApplication sharedApplication] canOpenURL:filzaURL]) {
+            [[UIApplication sharedApplication] openURL:filzaURL options:@{} completionHandler:nil];
+        }
+        else if ([[UIApplication sharedApplication] canOpenURL:fffffURL]) {
+            [[UIApplication sharedApplication] openURL:fffffURL options:@{} completionHandler:nil];
+        }
+    }];
+
+    UIAlertAction *deletePathAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Delete_Path_Only") style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+        [weakSelf removeMountPath:path unmount:NO];
+    }];
+
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Cancel") style:UIAlertActionStyleCancel handler:nil];
+
+    [actionAlertController addAction:unmountAction];
+    [actionAlertController addAction:viewAction];
+    [actionAlertController addAction:deletePathAction];
+    [actionAlertController addAction:cancelAction];
+
+    [self presentViewController:actionAlertController animated:YES completion:nil];
+}
+
+- (void)removeMountPath:(NSString *)path unmount:(BOOL)unmount
+{
+    if (unmount) {
+        int status = [[DOEnvironmentManager sharedManager] fakeMount:path unmount:YES shouldDeleteMntFiles:YES];
+        if (status != 0) {
+            // Keep the entry so the still active mount stays visible in the list
+            [self presentMountErrorWithBody:DOLocalizedString(@"Error_Unmount_Failed")];
+            return;
+        }
+    }
+
+    NSString *plistPath = JBROOT_PATH(@"/mnt/newFakePath.plist");
+    NSMutableDictionary *plist = [NSMutableDictionary dictionaryWithContentsOfFile:plistPath];
+    if (!plist) {
+        plist = [NSMutableDictionary dictionary];
+    }
+    id storedPaths = plist[@"path"];
+    NSMutableArray *paths = [storedPaths isKindOfClass:[NSArray class]] ? [storedPaths mutableCopy] : [NSMutableArray array];
+    [paths removeObject:path];
+    plist[@"path"] = paths;
+    [[DOEnvironmentManager sharedManager] mountDictionary:[plist copy] writeToFile:plistPath];
+}
+
+#pragma mark - Reboot
+
+- (void)rebootPressed
+{
+    UIAlertController *confirmationAlertController = [UIAlertController alertControllerWithTitle:DOLocalizedString(@"Alert_Reboot_Title") message:DOLocalizedString(@"Alert_Reboot_Body") preferredStyle:UIAlertControllerStyleAlert];
+    UIAlertAction *rebootAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Reboot") style:UIAlertActionStyleDestructive handler:^(UIAlertAction * _Nonnull action) {
+        [[DOEnvironmentManager sharedManager] reboot];
+    }];
+    UIAlertAction *cancelAction = [UIAlertAction actionWithTitle:DOLocalizedString(@"Button_Cancel") style:UIAlertActionStyleCancel handler:nil];
+    [confirmationAlertController addAction:rebootAction];
     [confirmationAlertController addAction:cancelAction];
     [self presentViewController:confirmationAlertController animated:YES completion:nil];
 }

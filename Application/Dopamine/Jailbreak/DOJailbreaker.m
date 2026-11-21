@@ -457,7 +457,10 @@ void *boomerang_server(struct boomerang_info *info)
     if (r != 0) {
         return [NSError errorWithDomain:JBErrorDomain code:JBErrorCodeFailedInitFakeLib userInfo:@{NSLocalizedDescriptionKey : [NSString stringWithFormat:@"Mounting fakelib failed with error: %d", r]}];
     }
-    
+
+    // Restore the mount mappings the user configured in the app
+    [[DOEnvironmentManager sharedManager] applyFakeMounts];
+
     // Now that fakelib is up, we want to make systemhook inject into any binary we spawn
     setenv("DYLD_INSERT_LIBRARIES", "/usr/lib/systemhook.dylib", 1);
     return nil;

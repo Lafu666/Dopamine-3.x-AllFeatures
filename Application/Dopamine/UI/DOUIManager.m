@@ -35,8 +35,15 @@
     return self;
 }
 
+- (BOOL)isUpdateCheckDisabled
+{
+    return [_preferenceManager boolPreferenceValueForKey:@"disableUpdateEnabled" fallback:NO];
+}
+
 - (BOOL)isUpdateAvailable
 {
+    if ([self isUpdateCheckDisabled]) return NO;
+
     NSString *latestVersion = [self getLatestReleaseTag];
     NSString *currentVersion = [self getLaunchedReleaseTag];
     return [latestVersion numericalVersionRepresentation] > [currentVersion numericalVersionRepresentation];
@@ -88,6 +95,8 @@
 
 - (BOOL)environmentUpdateAvailable
 {
+    if ([self isUpdateCheckDisabled]) return NO;
+
     if (![[DOEnvironmentManager sharedManager] jailbrokenVersion])
         return NO;
 

@@ -2,6 +2,7 @@
 #import <Foundation/Foundation.h>
 #import <libjailbreak/libjailbreak.h>
 #import <sys/mount.h>
+#import <stdlib.h>
 #import <libjailbreak/stock_fixes.h>
 
 SInt32 CFUserNotificationDisplayAlert(CFTimeInterval timeout, CFOptionFlags flags, CFURLRef iconURL, CFURLRef soundURL, CFURLRef localizationURL, CFStringRef alertHeader, CFStringRef alertMessage, CFStringRef defaultButtonTitle, CFStringRef alternateButtonTitle, CFStringRef otherButtonTitle, CFOptionFlags *responseFlags) API_AVAILABLE(ios(3.0));
@@ -87,6 +88,69 @@ int fakelib_set_mounted(bool mounted)
 		}
 		else {
 			r = unmount_unsandboxed("/usr/lib", MNT_FORCE);
+		}
+	}
+	return r;
+}
+
+bool fakePath_is_mounted(const char *path)
+{
+	struct statfs fsb;
+	if (statfs(path, &fsb) != 0) return false;
+	if (strcmp(fsb.f_mntonname, path) == 0) return true;
+
+	// /var is a symlink to /private/var, the kernel may report the resolved path
+	char resolvedPath[PATH_MAX];
+	if (realpath(path, resolvedPath) && strcmp(fsb.f_mntonname, resolvedPath) == 0) return true;
+
+	return false;
+}
+
+void initFakeMountPath(NSString *mountPath)
+{
+	NSFileManager *fileManager = [NSFileManager defaultManager];
+	if (![fileManager fileExistsAtPath:mountPath]) return;
+
+	NSString *fakePath = [JBROOT_PATH(@"/mnt") stringByAppendingString:mountPath];
+
+	BOOL needsCopy = NO;
+	if (![fileManager fileExistsAtPath:fakePath]) {
+		needsCopy = YES;
+	}
+	else {
+		NSArray *existingContents = [fileManager contentsOfDirectoryAtPath:fakePath error:nil];
+		if (existingContents && existingContents.count == 0) {
+			needsCopy = YES;
+		}
+	}
+	if (!needsCopy) return;
+
+	[fileManager createDirectoryAtPath:[fakePath stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
+
+	// Copy to a temporary path first so an interrupted copy does not leave a half filled fake path behind
+	NSString *tmpPath = [fakePath stringByAppendingString:@".tmp"];
+	[fileManager removeItemAtPath:tmpPath error:nil];
+	if (![fileManager copyItemAtPath:mountPath toPath:tmpPath error:nil]) {
+		[fileManager removeItemAtPath:tmpPath error:nil];
+		return;
+	}
+	[fileManager removeItemAtPath:fakePath error:nil];
+	[fileManager moveItemAtPath:tmpPath toPath:fakePath error:nil];
+}
+
+int fakePath_mount(bool mounted, const char *path)
+{
+	int r = 0;
+	if (mounted != fakePath_is_mounted(path)) {
+		if (mounted) {
+			NSString *mountPath = [NSString stringWithUTF8String:path];
+			initFakeMountPath(mountPath);
+			NSString *fakePath = [JBROOT_PATH(@"/mnt") stringByAppendingString:mountPath];
+			// Bind mount the fake path read only on top of the original path
+			r = mount("bindfs", path, MNT_RDONLY, (void *)fakePath.fileSystemRepresentation);
+		}
+		else {
+			r = unmount(path, MNT_FORCE);
 		}
 	}
 	return r;
@@ -187,6 +251,35 @@ int jbctl_handle_internal(const char *command, int argc, char* argv[])
 			return r;
 		}
 		return -1;
+	}
+	else if (!strcmp(command, "mount") || !strcmp(command, "unmount")) {
+		if (argc < 2) return -1;
+
+		bool toMount = !strcmp(command, "mount");
+		__block int r = -1;
+		// Steal the kernel ucred so we can mount to paths that are normally restricted by the sandbox
+		execute_unsandboxed(^{
+			r = fakePath_mount(toMount, argv[1]);
+		});
+		printf("%s %s -> %d\n", command, argv[1], r);
+		return r;
+	}
+	else if (!strcmp(command, "mount_all")) {
+		__block int r = 0;
+		execute_unsandboxed(^{
+			NSDictionary *mountInfo = [NSDictionary dictionaryWithContentsOfFile:JBROOT_PATH(@"/mnt/newFakePath.plist")];
+			NSArray *paths = mountInfo[@"path"];
+			if (![paths isKindOfClass:[NSArray class]]) return;
+
+			for (NSString *path in paths) {
+				if (![path isKindOfClass:[NSString class]] || path.length <= 1) continue;
+
+				int mountResult = fakePath_mount(true, path.fileSystemRepresentation);
+				printf("mount %s -> %d\n", path.fileSystemRepresentation, mountResult);
+				if (mountResult != 0) r = mountResult;
+			}
+		});
+		return r;
 	}
 	return -1;
 }

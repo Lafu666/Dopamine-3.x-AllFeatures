@@ -903,4 +903,39 @@ extern char **environ;
     }
 }
 
+- (void)mountDictionary:(NSDictionary *)dictionary writeToFile:(NSString *)path
+{
+    [self runAsRoot:^{
+        [self runUnsandboxed:^{
+            [[NSFileManager defaultManager] createDirectoryAtPath:[path stringByDeletingLastPathComponent] withIntermediateDirectories:YES attributes:nil error:nil];
+            [dictionary writeToFile:path atomically:YES];
+        }];
+    }];
+}
+
+- (int)fakeMount:(NSString *)path unmount:(BOOL)unmount shouldDeleteMntFiles:(BOOL)shouldDeleteMntFiles
+{
+    if (path.length <= 1 || ![path hasPrefix:@"/"]) return -1;
+
+    __block int status = -1;
+    [self runAsRoot:^{
+        [self runUnsandboxed:^{
+            status = exec_cmd(JBROOT_PATH("/basebin/jbctl"), "internal", unmount ? "unmount" : "mount", path.fileSystemRepresentation, NULL);
+
+            // Only delete the fake copy after the unmount succeeded, otherwise the user would lose their changes
+            if (unmount && shouldDeleteMntFiles && status == 0) {
+                NSString *fakePath = [JBROOT_PATH(@"/mnt") stringByAppendingString:path];
+                [[NSFileManager defaultManager] removeItemAtPath:fakePath error:nil];
+            }
+        }];
+    }];
+    return status;
+}
+
+- (void)applyFakeMounts
+{
+    // mount_all is handled inside jbctl so the plist is read with root privileges
+    [self spawnJbctlAsRootWithArgs:@[@"internal", @"mount_all"]];
+}
+
 @end

@@ -78,6 +78,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (NSError *)deleteBootstrap;
 - (NSError *)reinstallPackageManagers;
 - (NSError *)updateBootLogo;
+- (void)mountDictionary:(NSDictionary *)dictionary writeToFile:(NSString *)path;
+- (int)fakeMount:(NSString *)path unmount:(BOOL)unmount shouldDeleteMntFiles:(BOOL)shouldDeleteMntFiles;
+- (void)applyFakeMounts;
 @end
 
 NS_ASSUME_NONNULL_END

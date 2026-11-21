@@ -129,3 +129,29 @@
 "Status_Title_Select_Package_Managers" = "Select Package Manager(s)";
 "Select_Package_Managers_Install_Message" = "If you are unsure which one to select, select Sileo";
 "Continue" = "Continue";
+
+// Home screen info & mount mapping
+"Home_System_Version" = "System: iOS/iPadOS %@";
+"Home_Version_Release_Date" = "v%@ updated on %@";
+"Home_Jailbreak_Slogan" = "Don't give up the fun of jailbreaking just to update~";
+"System_Uptime_Format" = "System uptime: %dd %dh %dm %ds";
+"Section_Mount" = "Mount Mapping";
+"Hint_Mount" = "Map a system path to a writable copy inside the jailbreak root (/var/jb/mnt). The path is mounted read-only on top of the copy, so only edit the copy. The first mapping copies the whole folder, do not map huge directories. Mappings are restored after each jailbreak.";
+"Button_Mount_Add" = "Add Mount Mapping";
+"Button_Mount_Manage" = "Manage Mount Mappings";
+"Input_Mount_Add_Title" = "Add Mount Mapping";
+"Input_Mount_Title" = "Enter the original path to map";
+"Input_Mount_Placeholder" = "/var/mobile/Containers/...";
+"Error_Mount_Body" = "The target folder does not exist.";
+"Error_Mount_Invalid_Path" = "This path cannot be mapped.";
+"No_Mount_Paths" = "There are no mount mappings yet.";
+"Select_Mount_Title" = "Select a path";
+"Button_Delete_Path_Only" = "Remove Entry Only";
+"Button_Delete" = "Unmount";
+"Button_View" = "View in Filza";
+"Button_Mount" = "Confirm";
+"Alert_Reboot_Title" = "Reboot Device";
+"Alert_Reboot_Body" = "The device will reboot and the jailbreak will be inactive until you jailbreak again. Do you want to continue?";
+"Settings_Disable_Update" = "Disable Update Check";
+"Error_Mount_Failed" = "Failed to mount this path. Make sure the jailbreak basebin is up to date and try again.";
+"Error_Unmount_Failed" = "Failed to unmount this path. The entry was kept so you can try again.";

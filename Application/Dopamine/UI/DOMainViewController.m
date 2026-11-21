@@ -27,6 +27,25 @@
 
 @end
 
+static NSString *DOAppBuildDateString(void)
+{
+    static NSString *buildDate = nil;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSString *compileDate = [NSString stringWithUTF8String:__DATE__];
+        NSDateFormatter *inputFormatter = [[NSDateFormatter alloc] init];
+        inputFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        inputFormatter.dateFormat = @"MMM d yyyy";
+        NSDate *date = [inputFormatter dateFromString:[compileDate stringByReplacingOccurrencesOfString:@"  " withString:@" "]];
+
+        NSDateFormatter *outputFormatter = [[NSDateFormatter alloc] init];
+        outputFormatter.locale = [NSLocale localeWithLocaleIdentifier:@"en_US_POSIX"];
+        outputFormatter.dateFormat = @"yyyy-MM-dd";
+        buildDate = date ? [outputFormatter stringFromDate:date] : compileDate;
+    });
+    return buildDate;
+}
+
 @implementation DOMainViewController
 
 - (void)viewDidLoad {
@@ -74,10 +93,19 @@
     }
 
     //Header
+    DOEnvironmentManager *envManager = [DOEnvironmentManager sharedManager];
+    NSString *systemVersionString = [envManager systemVersion] ?: [[UIDevice currentDevice] systemVersion];
+    NSString *systemVersionLine = [NSString stringWithFormat:DOLocalizedString(@"Home_System_Version"), systemVersionString];
+    NSString *versionLine = [NSString stringWithFormat:DOLocalizedString(@"Home_Version_Release_Date"), [envManager appVersion], DOAppBuildDateString()];
+
     DOHeaderView *headerView = [[DOHeaderView alloc] initWithImage: [UIImage imageNamed:@"Dopamine"] subtitles: @[
-        [DOGlobalAppearance mainSubtitleString:[[DOEnvironmentManager sharedManager] versionSupportString]],
+        [DOGlobalAppearance mainSubtitleString:[envManager versionSupportString]],
         [DOGlobalAppearance secondarySubtitleString:DOLocalizedString(@"Credits_Made_By")],
-    ]];
+        [DOGlobalAppearance secondarySubtitleString:systemVersionLine withAlpha:0.6],
+        [DOGlobalAppearance secondarySubtitleString:versionLine withAlpha:0.6],
+        [DOGlobalAppearance secondarySubtitleString:DOLocalizedString(@"Home_Jailbreak_Slogan") withAlpha:0.8],
+        [DOGlobalAppearance secondarySubtitleString:@" " withAlpha:0.6],
+    ] uptimeSubtitleIndex:5];
     
     [stackView addArrangedSubview:headerView];
 

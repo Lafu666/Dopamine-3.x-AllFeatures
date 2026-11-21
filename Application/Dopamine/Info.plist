@@ -21,5 +21,10 @@
 	</dict>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>LSApplicationQueriesSchemes</key>
+	<array>
+		<string>filza</string>
+		<string>fffff</string>
+	</array>
 </dict>
 </plist>
