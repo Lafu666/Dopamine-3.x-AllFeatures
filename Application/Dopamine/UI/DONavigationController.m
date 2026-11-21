@@ -70,7 +70,7 @@
         [self.backgroundDimView.trailingAnchor constraintEqualToAnchor:self.view.trailingAnchor],
         [self.backgroundDimView.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [self.backgroundDimView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
-    ]);
+    ]];
 
     self.backAction = [[DOModalBackAction alloc] initWithAction:^{
         [self popViewControllerAnimated:YES];

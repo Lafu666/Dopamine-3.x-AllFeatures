@@ -102,9 +102,13 @@ jobs:
           sysctl -n hw.memsize || true
           gmake -j2 NIGHTLY=1 2>&1 | tee /tmp/build.log
 
-      - name: Build log tail
+      - name: Build failure summary
         if: failure()
-        run: tail -n 200 /tmp/build.log || true
+        run: |
+          echo "===== compiler errors ====="
+          grep -n -E "error:|BUILD FAILED|The following build commands failed|^[[:space:]]+gmake.*Error" /tmp/build.log | head -60 || true
+          echo "===== tail ====="
+          tail -n 60 /tmp/build.log || true
 
       - name: Upload Artifact
         id: dopamine-latest-upload
