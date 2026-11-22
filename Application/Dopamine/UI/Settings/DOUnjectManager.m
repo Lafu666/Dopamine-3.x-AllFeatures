@@ -25,6 +25,7 @@ static NSString *DOUnjectConfigFilePath(void)
 + (UIImage *)iconForBundleIdentifier:(NSString *)bundleIdentifier;
 + (UIImage *)placeholderIconWithName:(NSString *)name;
 + (UIImage *)resizedIcon:(UIImage *)icon size:(CGSize)size;
+- (void)scanApplicationDirectoriesInto:(NSMutableDictionary<NSString *, DOUnjectApp *> *)appsByIdentifier;
 @end
 
 @implementation DOUnjectApp
@@ -293,12 +294,80 @@ static NSString *DOUnjectConfigFilePath(void)
 
 #pragma clang diagnostic pop
 
+    if (appsByIdentifier.count == 0) {
+        [self scanApplicationDirectoriesInto:appsByIdentifier];
+    }
+
     _installedApps = [appsByIdentifier.allValues sortedArrayUsingComparator:^NSComparisonResult(DOUnjectApp *app1, DOUnjectApp *app2) {
         if (app1.isSystemApp != app2.isSystemApp) {
             return app1.isSystemApp ? NSOrderedDescending : NSOrderedAscending;
         }
         return [app1.name localizedStandardCompare:app2.name];
     }];
+}
+
+- (void)scanApplicationDirectoriesInto:(NSMutableDictionary<NSString *, DOUnjectApp *> *)appsByIdentifier
+{
+    // LSApplicationWorkspace is not reachable from every process, walk the app
+    // bundle directories instead so the list is never empty on a jailbroken device
+    NSArray<NSString *> *directories = @[@"/var/containers/Bundle/Application", @"/Applications"];
+
+    __block NSArray<NSDictionary *> *found = nil;
+    [[DOEnvironmentManager sharedManager] runUnsandboxed:^{
+        NSMutableArray<NSDictionary *> *results = [NSMutableArray array];
+        NSFileManager *fileManager = [NSFileManager defaultManager];
+
+        for (NSString *directory in directories) {
+            NSArray<NSString *> *containers = [fileManager contentsOfDirectoryAtPath:directory error:nil];
+            for (NSString *container in containers) {
+                NSString *containerPath = [directory stringByAppendingPathComponent:container];
+                NSArray<NSString *> *bundleNames = [fileManager contentsOfDirectoryAtPath:containerPath error:nil];
+                for (NSString *bundleName in bundleNames) {
+                    if (![bundleName hasSuffix:@".app"]) continue;
+
+                    NSString *bundlePath = [containerPath stringByAppendingPathComponent:bundleName];
+                    NSDictionary *info = [NSDictionary dictionaryWithContentsOfFile:[bundlePath stringByAppendingPathComponent:@"Info.plist"]];
+                    if (![info isKindOfClass:[NSDictionary class]]) continue;
+
+                    NSString *identifier = info[@"CFBundleIdentifier"];
+                    if (![identifier isKindOfClass:[NSString class]] || !identifier.length) continue;
+
+                    NSString *name = info[@"CFBundleDisplayName"];
+                    if (![name isKindOfClass:[NSString class]] || !name.length) name = info[@"CFBundleName"];
+                    if (![name isKindOfClass:[NSString class]] || !name.length) name = [bundleName stringByDeletingPathExtension];
+
+                    NSString *executable = info[@"CFBundleExecutable"];
+                    if (![executable isKindOfClass:[NSString class]]) executable = @"";
+
+                    [results addObject:@{
+                        @"identifier": identifier,
+                        @"name": name,
+                        @"executable": executable,
+                        @"path": bundlePath,
+                    }];
+                }
+            }
+        }
+
+        found = results;
+    }];
+
+    for (NSDictionary *entry in found) {
+        NSString *identifier = entry[@"identifier"];
+        if (appsByIdentifier[identifier]) continue;
+
+        DOUnjectApp *app = [[DOUnjectApp alloc] init];
+        app.bundleIdentifier = identifier;
+        app.name = entry[@"name"];
+        app.executableName = entry[@"executable"];
+        app.bundlePath = entry[@"path"];
+        if (!app.executableName.length) {
+            app.executableName = [app.bundlePath.lastPathComponent stringByDeletingPathExtension];
+        }
+        if (!app.executableName.length) continue;
+
+        appsByIdentifier[identifier] = app;
+    }
 }
 
 #pragma mark - Icons

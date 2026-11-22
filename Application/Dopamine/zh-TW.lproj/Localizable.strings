@@ -55,7 +55,7 @@
 
 // Settings Hints
 "Hint_Hide_Jailbreak" = "「隱藏越獄」會暫時移除越獄相關檔案，直到下次重新越獄為止";
-/*Hint_Hide_Jailbreak_Jailbroken*/
+"Hint_Hide_Jailbreak_Jailbroken" = "「隱藏越獄」可暫時關閉越獄，用來繞過部分越獄偵測。它並不徹底，也無法隱藏所有痕跡，效果大致等同於重新開機後尚未重新越獄的狀態，不能取代 RootHide。此選項可能引發問題，不提供技術支援，請自行承擔風險。";
 "Section_Jailbreak_Settings" = "越獄設定";
 "Section_Actions" = "操作";
 "Section_Customization" = "自訂";
@@ -131,7 +131,7 @@
 "Continue" = "繼續";
 
 // Home screen info & mount mapping
-"Home_System_Version" = "系統版本：iOS/iPadOS %@";
+"Home_System_Version" = "系統版本：%@ %@";
 "Home_Version_Release_Date" = "v%@ 更新於：%@";
 "Home_Jailbreak_Slogan" = "不要為了升級而放棄越獄的樂趣~";
 "System_Uptime_Format" = "系統已運行：%d天 %d時 %d分 %d秒";
@@ -181,3 +181,7 @@
 "Alert_Remove_Jailbreak_Jailbroken_Body" = "移除越獄會刪除所有與越獄相關的檔案，一般應用、檔案與使用者資料會保留，操作不可撤銷。\n\n「重新啟動後移除」（推薦）：裝置會先重新啟動，之後開啟 Dopamine 點擊越獄，程式會在越獄前完成清理。\n\n「立即移除」：立即刪除越獄環境並重新啟動，仍在運行的插件可能導致裝置異常。";
 "Button_Reboot_And_Remove" = "重新啟動後移除";
 "Button_Remove_Now" = "立即移除";
+
+// Unject loading & remove jailbreak switch
+"Unject_Loading" = "正在讀取已安裝的應用程式…";
+"Hint_Remove_Jailbreak_Switch" = "開啟並重新開機後，下次啟動將移除越獄，而不是重新越獄。";

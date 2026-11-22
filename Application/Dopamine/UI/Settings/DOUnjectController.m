@@ -120,6 +120,9 @@
 @property (nonatomic, strong) NSArray<DOUnjectApp *> *filteredApps;
 @property (nonatomic, strong) NSMutableSet<NSString *> *blacklistedIdentifiers;
 @property (nonatomic, assign) BOOL enabled;
+@property (nonatomic, assign) BOOL loadingApps;
+
+- (void)loadInstalledApps;
 
 @end
 
@@ -137,9 +140,8 @@
 
     _manager = [DOUnjectManager sharedManager];
     _enabled = _manager.enabled;
-    [_manager reloadInstalledApps];
-    _apps = _manager.installedApps;
-    _filteredApps = _apps;
+    _apps = @[];
+    _filteredApps = @[];
     _blacklistedIdentifiers = [[_manager blacklistedBundleIdentifiers] mutableCopy] ?: [NSMutableSet set];
 
     _tableView = [[UITableView alloc] initWithFrame:CGRectZero style:UITableViewStyleInsetGrouped];
@@ -166,6 +168,29 @@
     _searchBar.placeholder = DOLocalizedString(@"Unject_Search");
     _searchBar.tintColor = [UIColor colorWithRed:71.0/255.0 green:169.0/255.0 blue:135.0/255.0 alpha:1.0];
     _tableView.tableHeaderView = _searchBar;
+
+    [self loadInstalledApps];
+}
+
+- (void)loadInstalledApps
+{
+    // Enumerating every installed app takes a while, doing it here would block
+    // the page from appearing, which looks like the entry point does nothing
+    self.loadingApps = YES;
+    [self.tableView reloadData];
+
+    __weak typeof(self) weakSelf = self;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
+        [weakSelf.manager reloadInstalledApps];
+        NSArray<DOUnjectApp *> *apps = weakSelf.manager.installedApps;
+
+        dispatch_async(dispatch_get_main_queue(), ^{
+            weakSelf.loadingApps = NO;
+            weakSelf.apps = apps;
+            weakSelf.filteredApps = apps;
+            [weakSelf.tableView reloadData];
+        });
+    });
 }
 
 - (void)viewDidLayoutSubviews
@@ -256,6 +281,7 @@
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section
 {
     if (section == 0) return nil;
+    if (self.loadingApps) return DOLocalizedString(@"Unject_Loading");
     return DOLocalizedString(@"Unject_Footer");
 }
 

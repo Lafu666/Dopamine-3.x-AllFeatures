@@ -54,7 +54,7 @@
 
 // Settings Hints
 "Hint_Hide_Jailbreak" = "“隐藏越狱” 将在下次越狱前移除部分可能导致越狱检测的文件。";
-/*Hint_Hide_Jailbreak_Jailbroken*/
+"Hint_Hide_Jailbreak_Jailbroken" = "「隐藏越狱」可临时关闭越狱，用来绕过部分越狱检测。它并不彻底，也无法隐藏全部痕迹，效果大致相当于重启后尚未重新越狱的状态，不能替代 RootHide。该选项可能引发问题，不提供技术支持，请自行承担风险。";
 "Section_Jailbreak_Settings" = "越狱设置";
 "Section_Actions" = "操作";
 "Section_Customization" = "自定义";
@@ -126,7 +126,7 @@
 "Continue" = "继续";
 
 // Home screen info & mount mapping
-"Home_System_Version" = "系统版本：iOS/iPadOS %@";
+"Home_System_Version" = "系统版本：%@ %@";
 "Home_Version_Release_Date" = "v%@ 更新于：%@";
 "Home_Jailbreak_Slogan" = "不要为了升级而放弃越狱的乐趣~";
 "System_Uptime_Format" = "系统已运行：%d天 %d时 %d分 %d秒";
@@ -176,3 +176,7 @@
 "Alert_Remove_Jailbreak_Jailbroken_Body" = "移除越狱会删除所有与越狱相关的文件，普通应用、文件与用户数据会保留，操作不可撤销。\n\n「重启后移除」（推荐）：设备会先重启，之后打开 Dopamine 点击越狱，程序会在越狱前完成清理。\n\n「立即移除」：立即删除越狱环境并重启，仍在运行的插件可能导致设备异常。";
 "Button_Reboot_And_Remove" = "重启后移除";
 "Button_Remove_Now" = "立即移除";
+
+// Unject loading & remove jailbreak switch
+"Unject_Loading" = "正在读取已安装的应用…";
+"Hint_Remove_Jailbreak_Switch" = "开启并重启设备后，下次启动将移除越狱，而不是重新越狱。";

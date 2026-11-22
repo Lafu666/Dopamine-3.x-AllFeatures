@@ -11,13 +11,19 @@
 #import "DOGlobalAppearance.h"
 #import "DOThemeManager.h"
 
-@interface DONavigationController ()
+@interface DONavigationController () <UIGestureRecognizerDelegate>
 
 @property (nonatomic) UIImageView *backgroundImageView;
 @property (nonatomic) UIView *backgroundDimView;
 @property (nonatomic) CGSize lastBackgroundSize;
 @property (nonatomic) DOMainViewController *mainView;
 @property (nonatomic) DOModalBackAction *backAction;
+@property (nonatomic) BOOL backgroundPopInProgress;
+
+- (BOOL)isShowingMainView;
+- (void)updateBackActionGeometry;
+- (void)popFromBackground;
+- (void)backgroundTapped:(UITapGestureRecognizer *)gestureRecognizer;
 
 @end
 
@@ -72,8 +78,9 @@
         [self.backgroundDimView.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
     ]];
 
+    __weak typeof(self) weakSelf = self;
     self.backAction = [[DOModalBackAction alloc] initWithAction:^{
-        [self popViewControllerAnimated:YES];
+        [weakSelf popFromBackground];
     }];
     self.backAction.translatesAutoresizingMaskIntoConstraints = NO;
     self.backAction.hidden = YES;
@@ -86,6 +93,15 @@
         [self.backAction.topAnchor constraintEqualToAnchor:self.view.topAnchor],
         [self.backAction.bottomAnchor constraintEqualToAnchor:self.view.bottomAnchor],
     ]];
+
+    // The modal pages draw their own back button, and pages that do not have one
+    // are supposed to be dismissed by tapping the empty area around them. The
+    // navigation controller's transition view sits above the back action, so a
+    // tap gesture on the root view is used as a fallback for those pages.
+    UITapGestureRecognizer *backgroundTapRecognizer = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(backgroundTapped:)];
+    backgroundTapRecognizer.cancelsTouchesInView = NO;
+    backgroundTapRecognizer.delegate = self;
+    [self.view addGestureRecognizer:backgroundTapRecognizer];
 }
 
 - (void)viewDidLayoutSubviews
@@ -98,6 +114,52 @@
         self.lastBackgroundSize = size;
         self.backgroundImageView.image = [[[DOThemeManager sharedInstance] enabledTheme] imageForSize:size];
     }
+
+    [self updateBackActionGeometry];
+}
+
+- (BOOL)isShowingMainView
+{
+    return self.topViewController == self.mainView;
+}
+
+- (void)updateBackActionGeometry
+{
+    // The navigation transition view is added on top of the background views when
+    // a page is pushed, which would swallow the taps meant for the back action
+    if (self.view.subviews.lastObject != self.backAction) {
+        [self.view bringSubviewToFront:self.backAction];
+    }
+
+    UIView *topView = self.topViewController.view;
+    if (!topView || [self isShowingMainView]) return;
+
+    // Use the actual on screen frame of the page instead of the private
+    // _frameForViewController: value, which is not always up to date yet
+    CGRect pageFrame = [topView convertRect:topView.bounds toView:self.view];
+    if (!CGRectIsEmpty(pageFrame)) {
+        self.backAction.ignoreFrame = pageFrame;
+    }
+}
+
+- (void)popFromBackground
+{
+    // Both the back action view and the fallback tap gesture can fire for the
+    // same touch, make sure the page is only popped once
+    if (self.backgroundPopInProgress) return;
+    if (self.viewControllers.count <= 1 || [self isShowingMainView]) return;
+
+    self.backgroundPopInProgress = YES;
+    [self popViewControllerAnimated:YES];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        self.backgroundPopInProgress = NO;
+    });
+}
+
+- (void)backgroundTapped:(UITapGestureRecognizer *)gestureRecognizer
+{
+    if (gestureRecognizer.state != UIGestureRecognizerStateEnded) return;
+    [self popFromBackground];
 }
 
 - (void)setBackgroundDimmed:(BOOL)dimmed
@@ -127,7 +189,28 @@
 - (void)navigationController:(UINavigationController *)navigationController willShowViewController:(UIViewController *)viewController animated:(BOOL)animated
 {
     [self setBackgroundDimmed:![viewController isKindOfClass:[DOMainViewController class]]];
-    [self.backAction setIgnoreFrame:[self _frameForViewController:viewController]];
+    [self updateBackActionGeometry];
+}
+
+#pragma mark - UIGestureRecognizerDelegate
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer shouldReceiveTouch:(UITouch *)touch
+{
+    if (self.viewControllers.count <= 1) return NO;
+    if ([self isShowingMainView]) return NO;
+    if (self.backAction.hidden) return NO;
+
+    // Let touches inside the page through, only the surrounding area dismisses it
+    CGRect pageFrame = self.backAction.ignoreFrame;
+    if (CGRectIsEmpty(pageFrame)) {
+        UIView *topView = self.topViewController.view;
+        if (!topView) return NO;
+        pageFrame = [topView convertRect:topView.bounds toView:self.view];
+    }
+    if (CGRectIsEmpty(pageFrame)) return NO;
+
+    CGPoint point = [touch locationInView:self.view];
+    return !CGRectContainsPoint(pageFrame, point);
 }
 
 #pragma mark - Overrides

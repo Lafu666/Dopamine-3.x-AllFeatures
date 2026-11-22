@@ -131,7 +131,7 @@
 "Continue" = "Continue";
 
 // Home screen info & mount mapping
-"Home_System_Version" = "System: iOS/iPadOS %@";
+"Home_System_Version" = "System: %@ %@";
 "Home_Version_Release_Date" = "v%@ updated on %@";
 "Home_Jailbreak_Slogan" = "Don't give up the fun of jailbreaking just to update~";
 "System_Uptime_Format" = "System uptime: %dd %dh %dm %ds";
@@ -181,3 +181,7 @@
 "Alert_Remove_Jailbreak_Jailbroken_Body" = "Removing the jailbreak deletes all jailbreak-related files. Apps, files and user data are kept. This action cannot be undone.\n\nReboot & Remove (recommended): the device reboots first. Open Dopamine afterwards and tap Jailbreak — the cleanup runs before the jailbreak is applied.\n\nRemove Now: deletes the jailbreak environment immediately and reboots. Tweaks that are still running may cause the device to panic.";
 "Button_Reboot_And_Remove" = "Reboot & Remove";
 "Button_Remove_Now" = "Remove Now";
+
+// Unject loading & remove jailbreak switch
+"Unject_Loading" = "Reading installed apps…";
+"Hint_Remove_Jailbreak_Switch" = "Turn this on and reboot; the next launch will remove the jailbreak instead of rejailbreaking.";

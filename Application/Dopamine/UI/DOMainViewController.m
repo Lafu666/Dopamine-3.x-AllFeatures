@@ -95,7 +95,9 @@ static NSString *DOAppBuildDateString(void)
     //Header
     DOEnvironmentManager *envManager = [DOEnvironmentManager sharedManager];
     NSString *systemVersionString = [envManager systemVersion] ?: [[UIDevice currentDevice] systemVersion];
-    NSString *systemVersionLine = [NSString stringWithFormat:DOLocalizedString(@"Home_System_Version"), systemVersionString];
+    // iPad reports its OS as iPadOS since 13.0, iPhone and iPod touch keep saying iOS
+    NSString *osName = ([[UIDevice currentDevice] userInterfaceIdiom] == UIUserInterfaceIdiomPad) ? @"iPadOS" : @"iOS";
+    NSString *systemVersionLine = [NSString stringWithFormat:DOLocalizedString(@"Home_System_Version"), osName, systemVersionString];
     NSString *versionLine = [NSString stringWithFormat:DOLocalizedString(@"Home_Version_Release_Date"), [envManager appVersion], DOAppBuildDateString()];
 
     DOHeaderView *headerView = [[DOHeaderView alloc] initWithImage: [UIImage imageNamed:@"Dopamine"] subtitles: @[

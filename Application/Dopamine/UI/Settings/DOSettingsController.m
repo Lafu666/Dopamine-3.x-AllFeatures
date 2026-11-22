@@ -274,6 +274,18 @@
             [jetsamSpecifier setProperty:@"jetsamOptionNumbers" forKey:@"valuesDataSource"];
             [jetsamSpecifier setProperty:@"jetsamOptionTitles" forKey:@"titlesDataSource"];
             [specifiers addObject:jetsamSpecifier];
+
+            if (envManager.isJailbroken) {
+                // While jailbroken the removal is armed with a switch instead of a button:
+                // turning it on makes the next jailbreak attempt remove the bootstrap
+                PSSpecifier *removeJailbreakSwitchSpecifier = [PSSpecifier preferenceSpecifierNamed:DOLocalizedString(@"Button_Remove_Jailbreak") target:self set:@selector(setRemoveJailbreakEnabled:specifier:) get:defGetter detail:nil cell:PSSwitchCell edit:nil];
+                [removeJailbreakSwitchSpecifier setProperty:@YES forKey:@"enabled"];
+                [removeJailbreakSwitchSpecifier setProperty:@"removeJailbreakEnabled" forKey:@"key"];
+                [removeJailbreakSwitchSpecifier setProperty:@NO forKey:@"default"];
+                [specifiers addObject:removeJailbreakSwitchSpecifier];
+
+                [settingsGroupSpecifier setProperty:DOLocalizedString(@"Hint_Remove_Jailbreak_Switch") forKey:@"footerText"];
+            }
             
             if (!envManager.isJailbroken && !envManager.isInstalledThroughTrollStore) {
                 PSSpecifier *removeJailbreakSwitchSpecifier = [PSSpecifier preferenceSpecifierNamed:DOLocalizedString(@"Button_Remove_Jailbreak") target:self set:@selector(setRemoveJailbreakEnabled:specifier:) get:defGetter detail:nil cell:PSSwitchCell edit:nil];
@@ -298,6 +310,8 @@
                 [unjectManageSpecifier setProperty:[DOButtonCell class] forKey:@"cellClass"];
                 [unjectManageSpecifier setProperty:buttonHeight forKey:@"height"];
                 [unjectManageSpecifier setProperty:@"hand.raised.slash" forKey:@"image"];
+                [unjectManageSpecifier setProperty:@"unjectManage" forKey:@"key"];
+                [unjectManageSpecifier setProperty:@YES forKey:@"enabled"];
                 [unjectManageSpecifier setProperty:@"unjectManagePressed" forKey:@"action"];
                 [specifiers addObject:unjectManageSpecifier];
             }
@@ -364,12 +378,11 @@
                     [specifiers addObject:hideUnhideJailbreakSpecifier];
                 }
 
-                // The "Remove Jailbreak" button is available when jailbroken as well, but pressing it while
-                // the jailbreak is active is risky: deleteBootstrap can panic the device or leave it in a
-                // half uninstalled state. The pressed handler therefore offers the safe "reboot first" flow
-                // (arm removeJailbreakEnabled, reboot, then let the next jailbreak attempt clean up) as the
-                // recommended option and keeps the immediate removal as an explicit second choice.
-                if (envManager.isJailbroken || envManager.isInstalledThroughTrollStore) {
+                // While jailbroken the removal is offered as a switch below the Jetsam multiplier,
+                // so this button is only for the TrollStore install without an active jailbreak:
+                // pressing it while jailbroken would delete the bootstrap underneath a running
+                // jailbreak, which can panic the device or leave it half uninstalled.
+                if (!envManager.isJailbroken && envManager.isInstalledThroughTrollStore) {
                     PSSpecifier *removeJailbreakSpecifier = [PSSpecifier preferenceSpecifierNamed:@"" target:self set:defSetter get:defGetter detail:nil cell:PSStaticTextCell edit:nil];
                     [removeJailbreakSpecifier setProperty:@"Button_Remove_Jailbreak" forKey:@"title"];
                     [removeJailbreakSpecifier setProperty:[DOButtonCell class] forKey:@"cellClass"];
@@ -562,6 +575,8 @@
 
 - (void)unjectManagePressed:(PSSpecifier *)specifier
 {
+    if (self.presentedViewController) return;
+
     DOUnjectController *controller = [[DOUnjectController alloc] init];
     __weak typeof(self) weakSelf = self;
     controller.onChange = ^{
@@ -580,7 +595,11 @@
     navigationController.navigationBar.standardAppearance = appearance;
     navigationController.navigationBar.scrollEdgeAppearance = appearance;
 
-    [self presentViewController:navigationController animated:YES completion:nil];
+    // Present on the next run loop, presenting from inside a cell selection can
+    // be swallowed while the table view is still tracking the touch
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [self presentViewController:navigationController animated:YES completion:nil];
+    });
 }
 
 - (id)readAppJITEnabled:(PSSpecifier *)specifier
