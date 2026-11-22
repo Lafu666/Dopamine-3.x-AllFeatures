@@ -18,9 +18,27 @@
     if (self)
     {
         UIAction *action = [UIAction actionWithTitle:DOLocalizedString([specifier propertyForKey:@"title"]) image:[UIImage systemImageNamed:[specifier propertyForKey:@"image"] withConfiguration:[DOGlobalAppearance smallIconImageConfiguration]] identifier:[specifier propertyForKey:@"key"] handler:^(__kindof UIAction * _Nonnull action) {
-            SEL selector = NSSelectorFromString([specifier propertyForKey:@"action"]);
-            if ([[specifier target] respondsToSelector:selector]) {
-                [[specifier target] performSelector:selector withObject:specifier];
+            NSString *actionName = [specifier propertyForKey:@"action"];
+            if (!actionName.length) return;
+
+            // Accept both "- (void)foo" and "- (void)foo:(PSSpecifier *)specifier".
+            // The plain name used to silently do nothing whenever the target method
+            // took a specifier argument, because the selector didn't match.
+            SEL selectorWithArgument = NSSelectorFromString([actionName stringByAppendingString:@":"]);
+            SEL selector = NSSelectorFromString(actionName);
+            id target = [specifier target];
+
+            if ([target respondsToSelector:selectorWithArgument]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+                [target performSelector:selectorWithArgument withObject:specifier];
+#pragma clang diagnostic pop
+            }
+            else if ([target respondsToSelector:selector]) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
+                [target performSelector:selector];
+#pragma clang diagnostic pop
             }
         }];
 

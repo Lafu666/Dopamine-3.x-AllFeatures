@@ -573,7 +573,7 @@
     [self reloadSpecifiers];
 }
 
-- (void)unjectManagePressed:(PSSpecifier *)specifier
+- (void)unjectManagePressed
 {
     if (self.presentedViewController) return;
 
